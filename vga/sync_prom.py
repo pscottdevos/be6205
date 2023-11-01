@@ -27,6 +27,8 @@ DI  = 0b10000000
 # Inverted (XOR with 255 1s reverses all bits)
 HSY_INV = HSY ^ 0b11111111
 VSY_INV = VSY ^ 0b11111111
+HCR_INV = HCR ^ 0b11111111
+VCR_INV = VCR ^ 0b11111111
 
 # Horizontal Points of Interest after ignoring the 2s bit (bit 1)
 HBI_START = 100     # Start of Horizontal Blank Interval
@@ -57,7 +59,7 @@ def set_H_bits(x: int, byte: int):
         byte |= BI | HBI
     # H Counter Reset
     elif x == HBI_END:
-        byte |= HCR
+        byte &= HCR_INV
     # Filler
     else:
         byte = 0
@@ -72,7 +74,8 @@ def main(outfile: str):
             # fill the address space after VBI_END and the start of the next
             # line
             for x in range(256):
-                byte = HSY | VSY # sync sigs are inverted; set by default
+                # sync and reset signals are inverted; set by default
+                byte = HSY | VSY | HCR | VCR
 
                 # V Display Interval
                 if y < VBI_START:
@@ -95,9 +98,10 @@ def main(outfile: str):
                     byte = set_H_bits(x, byte)
                 # V Counter Reset
                 elif y == VBI_END:
-                    # Just need one
+                    # Just need one vertical reset byte
                     if x == 0:
-                        byte |= VCR | HCR
+                        byte &= VCR_INV
+                        byte &= HCR_INV
                     # the rest is filler
                     else:
                         byte = 0
