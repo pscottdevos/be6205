@@ -58,11 +58,11 @@ def set_H_bits(x: int, byte: int):
     elif x < HBI_END:
         byte |= BI | HBI
     # H Counter Reset
-    elif x == HBI_END:
-        byte &= HCR_INV
-    # Filler
     else:
-        byte = 0
+        # Just need one horizontal counter reset normally, but in case system
+        # power up at an address "inbetween" scan lines, want to reset HCR to
+        # get things started
+        byte &= HCR_INV
     return byte
 
 
@@ -70,7 +70,7 @@ def main(outfile: str):
     with open(outfile, 'wb') as fp:
         for y in range(256):
 
-            # we have to cycle through all 7 bits of horizontal addresses to
+            # we have to cycle through all 8 bits of horizontal addresses to
             # fill the address space after VBI_END and the start of the next
             # line
             for x in range(256):
@@ -97,17 +97,12 @@ def main(outfile: str):
                     byte |= BI | VBI
                     byte = set_H_bits(x, byte)
                 # V Counter Reset
-                elif y == VBI_END:
-                    # Just need one vertical reset byte
-                    if x == 0:
-                        byte &= VCR_INV
-                        byte &= HCR_INV
-                    # the rest is filler
-                    else:
-                        byte = 0
-                # Filler
                 else:
-                    byte = 0
+                    # Just need one vertical reset byte normally, but system
+                    # could start at power up with any random address, so best
+                    # to reset HCR and VCR until the end of the address space
+                    byte &= VCR_INV
+                    byte &= HCR_INV
 
                 fp.write(bytes([byte]))
 
