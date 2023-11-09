@@ -37,7 +37,7 @@ def convert_image(
     # directly instead of looking them up in the palette
     image = image.convert('RGB')
     # Number of scan lines is binary size * 1024 / 128 (128 is the number
-    # of address per scan line) which works out to binary_size * 8
+    # of addresses per scan line) which works out to binary_size * 8
     for y in range(binary_size * 8):
         # 128 is the number of memory addresses per scan line. This is
         # fixed by the Ben Eater video card design of using 7 row address
