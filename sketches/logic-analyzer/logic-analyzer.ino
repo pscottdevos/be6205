@@ -3,6 +3,7 @@
 void setup() {
     Serial.begin(2000000);
     DDRA = 0b00000000;
+    DDRB = 0b00000000;
     DDRC = 0b00000000;
     DDRL = 0b00000000;
     pinMode(CLOCK_INTERRUPT, INPUT);
@@ -16,12 +17,22 @@ void loop() {
 void onClock() {
     unsigned int addr_low = PINA & 0b11111111;
     unsigned int addr_high = PINC & 0b11111111;
+    unsigned int rw_data = PINB & 0b00000001;
     unsigned int data = PINL & 0b11111111;
     char output[30];
 
-    char bin[9] = "00000000";
-    byte2binary(data, bin);
-    sprintf(output, "%02x%02x    %s", addr_high, addr_low, bin);
+    char dbin[9] = "00000000";
+    char lbin[9] = "00000000";
+    char hbin[9] = "00000000";
+
+    byte2binary(data, dbin);
+    byte2binary(addr_low, lbin);
+    byte2binary(addr_high, hbin);
+    char rw = rw_data ? 'r' : 'W';
+    sprintf(
+      output, "%s%s %02x%02x   %c  %s %02x",
+      hbin, lbin, addr_high, addr_low, rw, dbin, data
+    );
     Serial.println(output);
 }
 
