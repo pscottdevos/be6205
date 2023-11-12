@@ -68,9 +68,7 @@ def get_palette() -> Image:
     '''Creates an image that can be used as a palette'''
 
     # List all the colors in hexidecimal in order of R,G,B,R,G,B...
-    # and convert to byte string. frombytes() requires 256 colors
-    # so append 576 [3 color channels * (256 - 64) remaining colors]
-    # zeroes to the end of the palette. Color palette is chosen to
+    # and convert to byte string. Color palette is chosen to
     # match the colors produceable by the Ben Eater video card
     palette_bytes = bytes([
         0x00, 0x00, 0x00,
@@ -137,11 +135,11 @@ def get_palette() -> Image:
         0xff, 0xff, 0x55,
         0xff, 0xff, 0xaa,
         0xff, 0xff, 0xff,
-    ] + [0, 0, 0] * 192) # frombytes expects 256 * 3 bytes
+    ])
     # Create an RGB image from the palatte byte string. Image
     # is a row of pixels of each color followed by two rows of
     # black (0, 0, 0)
-    palette = Image.frombytes('RGB', (64, 3), palette_bytes)
+    palette = Image.frombytes('RGB', (64, 1), palette_bytes)
     # Convert image to a Palette image. Using Adaptive strategy
     # forces image to use the palette colors. If you leave off
     # the palette argument, it will convert the image to using
