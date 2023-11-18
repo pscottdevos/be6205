@@ -1,3 +1,5 @@
 *.swp
 .vscode
 tags
+a.out
+*.bin
