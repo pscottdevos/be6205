@@ -1,11 +1,8 @@
 #! /usr/bin/env python
-from pathlib import Path
 from argparse import ArgumentParser
 from io import BufferedWriter
 
 from PIL import Image
-
-DIR = Path(__file__).parent
 
 def convert_image(
         image: Image.Image,
@@ -19,7 +16,7 @@ def convert_image(
     palette = get_palette()
     # Save the palette image. Can be helpful to debug hardware problems
     # if BE video image doesn't match the expected image (saved below)
-    palette.save(DIR/'palette.png')
+    palette.save('palette.png')
     # resize the image
     image = image.resize(image_size)
     # quantize() converts the image to the 64 colors of our palette
