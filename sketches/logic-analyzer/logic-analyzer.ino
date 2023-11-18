@@ -8,7 +8,7 @@ void setup() {
     DDRL = 0b00000000;
     pinMode(CLOCK_INTERRUPT, INPUT);
     
-    attachInterrupt(CLOCK_INTERRUPT, onClock, RISING);
+    attachInterrupt(CLOCK_INTERRUPT, onClock, FALLING);
 }
 
 void loop() {
