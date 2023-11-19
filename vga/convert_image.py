@@ -19,6 +19,8 @@ def convert_image(
     palette.save('palette.png')
     # resize the image
     image = image.resize(image_size)
+    # Force the image to RGB mode
+    image = image.convert('RGB')
     # quantize() converts the image to the 64 colors of our palette
     # image. Dithering simulates a color by creating a "checkerboard"
     # of colors that the eye blends together. Floyd Steinberg is the
