@@ -1,5 +1,12 @@
+# Vim swap files
 *.swp
+# VSCode config
 .vscode
+# Exuberant ctags file
 tags
+# compiler output
 a.out
 *.bin
+# Interim files created when converting image to BE WWVC binary
+vga/converted.png
+vga/palette.png
