@@ -33,18 +33,18 @@ init:
     jsr lcd_instruction
 
     ldx #0
-print:
+.print:
     lda message,x
     beq loop
     jsr print_char
     inx
-    jmp print
-
-message:
-     .asciiz "Witness Me!"
+    jmp .print
 
 loop:
     jmp loop
+
+message:
+     .asciiz "Witness Me!"
 
 lcd_wait:
     pha
@@ -88,3 +88,9 @@ print_char:
     lda #RS         ; "
     sta PORTA       ; "
     rts
+
+    .ifdef vectors
+    .org $fffc
+    .word init
+    .word $0000
+    .endif
