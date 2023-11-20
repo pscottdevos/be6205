@@ -11,12 +11,14 @@ RDY = %10000000
 value = $0200       ; loc value to convert to decimal
 mod10 = $0202       ; loc modulus
 message = $0204     ; six bytes for message
+counter = $020a     ; 2 byte interrupt counter
 
     .org $8000
 
-init:
+reset:
     ldx #$ff        ; Start stack pointer at top of stack
     txs
+    cli             ; enable interrupts
 
     lda #%11111111  ; Set all pins on port B to output
     sta DDRB
@@ -36,14 +38,25 @@ init:
     lda #%00000001  ; Clear Display
     jsr lcd_instruction
 
+    ; Initialize counter
+    lda #
+    sta counter
+    sta counter + 1
+
+
+loop:
+    ; Home the display
+    lda #%00000010
+    jsr lcd_instruction
+
     ; initialize message to zero length string
     lda #0
     sta message
 
-    ; Initalize value to be the number to convert
-    lda number
+    ; Initalize value to be the counter
+    lda counter
     sta value
-    lda number + 1
+    lda counter + 1
     sta value + 1
 
 divide:
@@ -96,9 +109,7 @@ divide:
     inx
     jmp .print
 
-    
 
-loop:
     jmp loop
     
 number:
@@ -166,8 +177,17 @@ print_char:
     sta PORTA       ; "
     rts
 
+nmi:
+irq:
+    inc counter
+    bne .exit_irq
+    inc counter + 1
+.exit_irq
+    rti
+
     .ifdef vectors
-    .org $fffc
-    .word init
-    .word $0000
+    .org $fffa
+    .word nmi
+    .word reset
+    .word irq
     .endif
