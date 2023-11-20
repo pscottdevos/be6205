@@ -3,8 +3,6 @@ PORTA = $6001
 DDRB = $6002
 DDRA = $6003
 
-RESV = $fffc
-
 E = %10000000
 RW = %01000000
 RS = %00100000
@@ -34,33 +32,16 @@ init:
     lda #%00000001  ; Clear Display
     jsr lcd_instruction
 
-    lda #"H"
+    ldx #0
+print:
+    lda message,x
+    beq loop
     jsr print_char
-    lda #"e"
-    jsr print_char
-    lda #"l"
-    jsr print_char
-    lda #"l"
-    jsr print_char
-    lda #"o"
-    jsr print_char
-    lda #","
-    jsr print_char
-    lda #" "
-    jsr print_char
-    lda #"W"
-    jsr print_char
-    lda #"o"
-    jsr print_char
-    lda #"r"
-    jsr print_char
-    lda #"l"
-    jsr print_char
-    lda #"d"
-    jsr print_char
-    lda #"!"
-    jsr print_char
+    inx
+    jmp print
 
+message:
+     .asciiz "Witness Me!"
 
 loop:
     jmp loop
@@ -69,14 +50,14 @@ lcd_wait:
     pha
     lda #%00000000  ; Set all pins read on Port B
     sta DDRB
-lcd_busy:
+.lcd_busy:
     lda #RW         ; Set RW to Read; Clear RS/E bits
     sta PORTA       ; "
     lda #(RW | E)   ; Set Enable bit
     sta PORTA
     lda PORTB       ; Read from Port B
     and #RDY        ; Mask Instruction Ready bit
-    bne lcd_busy    ; Look again if not ready
+    bne .lcd_busy    ; Look again if not ready
 
     lda #RW         ; Reset Enable bit
     sta PORTA       ; "
@@ -107,6 +88,3 @@ print_char:
     lda #RS         ; "
     sta PORTA       ; "
     rts
-
-    .org RESV
-    .word init,$0000
