@@ -24,13 +24,13 @@ VCR = 0b00100000
 BI  = 0b01000000
 DI  = 0b10000000
 
-# Inverted (XOR with 255 1s reverses all bits)
-HSY_INV = HSY ^ 0b11111111
-VSY_INV = VSY ^ 0b11111111
-HCR_INV = HCR ^ 0b11111111
-VCR_INV = VCR ^ 0b11111111
+# Inverted (XOR with 255 reverses all bits)
+HSY_INV = HSY ^ 255
+VSY_INV = VSY ^ 255
+HCR_INV = HCR ^ 255
+VCR_INV = VCR ^ 255
 
-# Horizontal Points of Interest after ignoring the 2s bit (bit 1)
+# Horizontal Points of Interest after ignoring the 1s bit (bit 0)
 HBI_START = 100     # Start of Horizontal Blank Interval
 HSY_START = 105     # Start of Horizontal Sync
 HSY_END   = 121     # End of Horizontal Sync
@@ -75,6 +75,7 @@ def main(outfile: str):
             # line
             for x in range(256):
                 # sync and reset signals are inverted; set by default
+                # horizontal and vertical counter reset also set by default
                 byte = HSY | VSY | HCR | VCR
 
                 # V Display Interval

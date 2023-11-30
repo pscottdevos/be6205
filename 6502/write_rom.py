@@ -59,7 +59,7 @@ def write_rom(fp: BufferedWriter, device: str, start: bytes):
         # w command returns text that doesn't end in a prompt (>)
         sys.stdout.write(dev.readline().decode('ascii'))
         sys.stdout.write(dev.readline().decode('ascii'))
-
+        # Send the image using xmodem protocol
         modem = xmodem.XMODEM(get, put)
         success = modem.send(fp)
         sys.stdout.write(read_response(dev))
