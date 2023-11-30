@@ -10,6 +10,11 @@ RDY = %10000000
 
     .org $8000
 
+nmi:
+irq:
+    lda #0
+    rti
+
 reset:
     ldx #$ff        ; Start stack pointer at top of stack
     txs
@@ -88,10 +93,6 @@ print_char:
     lda #RS         ; "
     sta PORTA       ; "
     rts
-
-nmi:
-irq:
-    rti
 
     .ifdef vectors
     .org $fffa
