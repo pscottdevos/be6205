@@ -84,7 +84,6 @@ lcd_instruction:
 
 print_char:
     jsr lcd_wait
-    sta PORTB
     sta PORTB       ; Store A register to Port B
     lda #RS         ; Set RS bit; Clear RW/E bits
     sta PORTA
