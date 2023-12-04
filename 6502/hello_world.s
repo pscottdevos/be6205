@@ -12,9 +12,6 @@ RDY = %10000000
 
 nmi:
 irq:
-    lda #0
-    rti
-
 reset:
     ldx #$ff        ; Start stack pointer at top of stack
     txs
