@@ -1,7 +1,16 @@
 ; Zero page definitions
-MESSAGE = $03
+REG_VAL = $00   ; Register value
+WT_TIME = $01   ; outer timer index; 1 byte
+CYCLE = $02     ; cycle index, counts times each test has run
+MESSAGE = $03   ; Location of Message; 2 bytes
+PP_DIR = $05    ; Current ping-pong test direction; 0 = left; 1 = right; 1 byte
 
 ; Hardware addresses
+
+; Test register
+REG = $5000    ; Register 0 memory location
+REG1 = $5001    ; Register 1 memory location
+REG2 = $5002    ; Register 2 memory location
 
 ; 6522 IO Registers
 PORTB = $6000
@@ -9,13 +18,23 @@ PORTA = $6001
 DDRB = $6002
 DDRA = $6003
 
-; LCD Controller-related contants
-E = %10000000
-RW = %01000000
-RS = %00100000
-RDY = %10000000
+; 6502 vectors
+VECTORS = $fffa
 
-    .org $8000
+; Start of ROM
+ROM = $8000
+
+; Constants
+Cycles = 5      ; (decimal) Number of times to run each test in each loop
+
+; LCD Controller-related contants
+E = %10000000   ; LCD controller Enable bit
+RW = %01000000  ; LCD controller RW bit
+RS = %00100000  ; LCD controller Register Select bit
+RDY = %10000000 ; LCD controller Ready bit
+
+
+    .org ROM
 
 nmi:
 irq:
@@ -23,26 +42,124 @@ reset:
     ldx #$ff        ; Start stack pointer at top of stack
     txs
 
-    jsr lcd_init
-    jsr lcd_clear
+    lda #$10        ; Init wait timer - waiting for LCD display to be ready
+    jsr wait        ; wait
+    jsr lcd_init    ; Then initialize LCD
 
-    ldx #<message
-    ldy #>message
+;##################################
+; Main program loop
+;##################################
+tests:
+    ; print alt bits message
+    jsr lcd_clear
+    ldx #<alt_bits_msg
+    ldy #>alt_bits_msg
+    lda #$55
     jsr print_str
 
-loop:
-    jmp loop
+    ; Set up for alternate bits test
+    lda #Cycles     ; Init cycle counter
+    sta CYCLE
 
+alternate_bits_test:
+    lda #$55        ; set even numbered bits
+    sta REG
+    lda #$07        ; Init wait timer
+    jsr wait        ; wait
+    lda #$aa        ; set odd numbered bits
+    sta REG
+    lda #$07        ; Init wait timer
+    jsr wait        ; wait
+    dec CYCLE       ; Loop unless done with test
+    bne alternate_bits_test
+
+    ; print rot bits message
+    jsr lcd_clear
+    ldx #<rot_bits_msg
+    ldy #>rot_bits_msg
+    jsr print_str
+
+    ; Set up for rotate bits test
+    lda #Cycles     ; Init cycle counter
+    sta CYCLE
+    lda #%00000000  ; Prepare register value no bits set
+    sta REG_VAL
+    sec             ; set the carry bit
+
+rotate_bits_test:
+    lda REG_VAL     ; Store register value to register
+    sta REG
+    lda #$02        ; Init wait timer
+    jsr wait        ; wait
+    rol REG_VAL     ; Rotate left (with carry)
+    ; Loop until register value is zero again
+    bne rotate_bits_test
+
+    dec CYCLE       ; Loop unless done with test
+    bne rotate_bits_test
+
+
+    ; print ping pong bits message
+    jsr lcd_clear
+    ldx #<ping_pong_msg
+    ldy #>ping_pong_msg
+    jsr print_str
+
+    ; Set up for ping-pong bits test
+    lda #Cycles     ; Init cycle counter
+    sta CYCLE
+
+ping_pong_test:
+    lda #$00        ; Start with ping-pong dir to left
+    sta PP_DIR
+    lda #%00000001  ; Set bit 0 of Register value
+    sta REG_VAL
+.loop:
+    lda REG_VAL     ; Store Register value to Register
+    sta REG
+    lda #$01        ; Init wait timer
+    jsr wait        ; Wait
+    lda PP_DIR      ; If ping-pong dir is zero...
+    beq .do_rol     ;   branch to rotate left
+.do_ror:
+    clc
+    ror REG_VAL     ; Otherwise rotate right and...
+    jmp .past_rol   ;   jump past rol
+.do_rol:
+    clc
+    rol REG_VAL     ; Rotate Register value left
+.past_rol:
+    lda REG_VAL        
+    cmp #%10000000  ; If Register value != 10000000...
+    bne .bit_right  ;   branch to test right bit 
+    lda #$01
+    sta PP_DIR      ; Change ping-pong direction to right
+    jmp .loop       ; jump back to rotate bits again
+.bit_right:
+    cmp #%00000001  ; If Register value != 00000001...
+    bne .loop       ;   branch back to rotate bits again
+    lda #$00        ; Otherwise
+    sta PP_DIR      ;   Change ping-pong direction to left
+    dec CYCLE       ; If no cycles remain
+    bne .loop       ;   branch back to rotate bits again
+
+    jmp tests       ; Loop back to first test forever
+;##################################
+; End Main program loop
+;##################################
+
+
+; Subroutine Library
+
+; Clear LCD Display
 lcd_clear:
     pha
-    lda #%00000001  ; Clear Display
-    jsr lcd_instruction
     lda #%00000001  ; Clear Display
     jsr lcd_instruction
     pla
     rts
 
-; Initialize and clear LCD screen
+; Init LCD display
 lcd_init:
     pha
     lda #%11111111  ; Set all pins on port B to output
@@ -51,15 +168,26 @@ lcd_init:
     sta DDRA
     lda #%00111000  ; 8-bit mode; 2-line display; 5x8 format
     jsr lcd_instruction
-    lda #%00001100  ; Set display on; Cursor on; no blink cursor
+    lda #%00001100  ; Set display on; Cursor off; no blink cursor
     jsr lcd_instruction
     lda #%00000110  ; Increment cursor position; no scroll
-    jsr lcd_instruction
-    lda #%00000001  ; Clear Display
     jsr lcd_instruction
     pla
     rts
 
+; Send instruction to LCD controller
+lcd_instruction:
+    jsr lcd_wait
+    sta PORTB
+    lda #0          ; Clear RS/RW/E bits
+    sta PORTA
+    lda #E          ; Toggle enable bit to send instruction
+    sta PORTA       ; "
+    lda #0          ; "
+    sta PORTA       ; "
+    rts
+
+; Wait for LCD to respond
 lcd_wait:
     pha
     lda #%00000000  ; Set all pins read on Port B
@@ -72,7 +200,6 @@ lcd_wait:
     lda PORTB       ; Read from Port B
     and #RDY        ; Mask Instruction Ready bit
     bne .lcd_busy    ; Look again if not ready
-
     lda #RW         ; Reset Enable bit
     sta PORTA       ; "
     lda #%11111111  ; Set all pins on port B to output
@@ -80,17 +207,8 @@ lcd_wait:
     pla
     rts
 
-lcd_instruction:
-    jsr lcd_wait
-    sta PORTB
-    lda #0          ; Clear RS/RW/E bits
-    sta PORTA
-    lda #E          ; Toggle enable bit to send instruction
-    sta PORTA       ; "
-    lda #0          ; "
-    sta PORTA       ; "
-    rts
-
+; Print character to LCD screen
+;   Input: A register - ascii char to print
 print_char:
     jsr lcd_wait
     sta PORTB       ; Store A register to Port B
@@ -117,14 +235,50 @@ print_str:
     jmp .print      ; loop back for next character
 .done:
     pla
+    pla
+    sta REG2
+    tax
+    pla
+    tay
+    dey
+    tya
+    sta REG1
+    pha
+    txa
+    pha
+    rts
+
+; Wait time specified in A register
+;   Input: A register - timer value to wait
+wait:
+    sta WT_TIME ; Store at WT_TIME address
+.loop2
+    ldy #$00    ; loop y 256 times
+.loop1
+    ldx #$00    ; loop x 256 times
+.loop0
+    dex         ; dec x and...
+    bne .loop0  ;   inner loop until zero
+    dey         ; dec y and...
+    bne .loop1  ;   middle loop until zero
+    dec WT_TIME ; dec value at WT_TIME and...
+    bne .loop2  ;   outer loop until zero
     rts
 
 ; ROM Data
-message:
-     .asciiz "01234567890ABCDE                        F012"
+
+alt_bits_msg:
+    .asciiz "Alternate bits                          test"
+
+rot_bits_msg:
+    .asciiz "Rotate bits test"
+
+ping_pong_msg:
+    .asciiz "Ping pong test"
+
 
     .ifdef vectors
-    .org $fffa
+    .org VECTORS
     .word nmi
     .word reset
     .word irq
