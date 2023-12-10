@@ -225,7 +225,6 @@ print_char:
 ; Print string to LCD screen
 ;   Input: x, y: low order, high order of message location
 print_str:
-    pha
     stx MESSAGE     ; Store low order byte of message location
     sty MESSAGE + 1 ; Store high order byte of message location
     ldy #0          ; y register holds offset from start of string
@@ -236,7 +235,6 @@ print_str:
     iny             ; prep for the next character
     jmp .print      ; loop back for next character
 .done:
-    pla
     rts
 
 ; Wait time specified in A register
