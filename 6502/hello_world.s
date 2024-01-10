@@ -8,7 +8,10 @@ RW = %01000000
 RS = %00100000
 RDY = %10000000
 
-    .org $8000
+ROM = $8000
+VECTORS = $fffa
+
+    .org ROM
 
 nmi:
 irq:
@@ -91,7 +94,7 @@ print_char:
     rts
 
     .ifdef vectors
-    .org $fffa
+    .org VECTORS
     .word nmi
     .word reset
     .word irq
