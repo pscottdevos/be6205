@@ -18,20 +18,39 @@ E = %10000000   ; LCD controller Enable bit
 RW = %01000000  ; LCD controller RW bit
 RS = %00100000  ; LCD controller Register Select bit
 RDY = %10000000 ; LCD controller Ready bit
+ADDR = %01111111; LCD controller cursor address counter bits
+DSP = %00001110 ; LCD display control; display on; Cursor on; no blink cursor
+CSR = %00000110 ; LCD cursor contol; Increment cursor position; no scroll
 
 ; Zero page variables
+MESSAGE = $00   ; Address of msg being printed to LCD; 2 bytes
+LCD_VEC = $fe   ; Address of saved LCD data (for indirect, indexed addressing)
 
-A = $1fff       ; A register
-X = $1ffe       ; X register
-Y = $1ffd       ; Y register
-S = $1ffa       ; Status register
-PC = $1ffb      ; Program Counter; 2 bytes
-SP = $1ff9      ; Stack Pointer
-SV = $1ff8      ; Value at Stack Pointer
+; Debugger variables
+A = $1fff           ; A register
+X = $1ffe           ; X register
+Y = $1ffd           ; Y register
+S = $1ffa           ; Status register
+PC = $1ffb          ; Program Counter; 2 bytes
+SP = $1ff9          ; Stack Pointer
+SV = $1ff8          ; Value at Stack Pointer
+LCD_DATA = SV - 81  ; Reserve 81 (decimal) bytes for LCD data
 
 
     .org ROM
 reset:
+    ldx #$ff        ; Set top of stack pointer
+    txs
+    jsr lcd_init
+    jsr lcd_clear
+    ldx #<msg1      ; print hello world message
+    ldy #>msg1
+    jsr print_str
+    ldx #<msg2      ; print additional message
+    ldy #>msg2
+    jsr print_str
+
+.loop
     lda #$5a
     clc
     adc #$5a        ; Should set overflow flag
@@ -51,11 +70,39 @@ reset:
     pla
     pla
     pla
-    jmp reset
+    jmp .loop
+
+msg1:
+    .asciiz "Witness Me!!!                           "
+msg2
+    .asciiz "Shiny and Chrome"
 
 
     .org NODEBUG
 ; Subroutine Library
+
+; Get LCD address counter
+;   Output:
+;       A register - LCD address counter value
+lcd_addr:
+    lda #%00000000  ; Set all pins on Port B to input
+    sta DDRB
+.lcd_busy:
+    lda #RW         ; Set RW to Read; Clear RS/E bits
+    sta PORTA       ; "
+    lda #(RW | E)   ; Set Enable bit
+    sta PORTA
+    lda PORTB       ; Read from Port B
+    pha             ; Save port B result on stack
+    and #RDY        ; Mask Instruction Ready bit
+    bne .lcd_busy   ; Look again if not ready
+    lda #RW         ; Reset Enable bit
+    sta PORTA       ; "
+    lda #%11111111  ; Set all pins on port B to output
+    sta DDRB        ; "
+    pla             ; Recover saved port B value
+    and #ADDR       ; Mask address bits
+    rts
 
 ; Clear LCD Display
 lcd_clear:
@@ -74,9 +121,9 @@ lcd_init:
     sta DDRA
     lda #%00111000      ; 8-bit mode; 2-line display; 5x8 format
     jsr lcd_instruction
-    lda #%00001100      ; Set display on; Cursor off; no blink cursor
+    lda #DSP            ; Set display control
     jsr lcd_instruction
-    lda #%00000110      ; Increment cursor position; no scroll
+    lda #CSR            ; Set cursor control
     jsr lcd_instruction
     pla
     rts
@@ -93,6 +140,26 @@ lcd_instruction:
     sta PORTA       ; "
     rts
 
+; Read byte at LCD address couter
+lcd_read
+;   Output: A register - byte from address couter
+;   Side Effect: LCD address counter increments/decrements (based on mode set)
+    jsr lcd_wait
+    lda #%00000000      ; Set all pins on Port B to input
+    sta DDRB
+    lda #(RW | RS)      ; Set RW to Read; RS to data; Clear E bit
+    sta PORTA
+    lda #(RW | RS | E)  ; Set Enable bit
+    sta PORTA
+    lda PORTB           ; Read from Port B
+    pha                 ; Save data to stack
+    lda #(RW | RS)      ; Set RW to Read; RS to data; Clear E bit
+    sta PORTA           ; "
+    lda #%11111111      ; Set all pins on port B to output
+    sta DDRB            ; "
+    pla                 ; Recover data saved to stack
+    rts
+
 ; Wait for LCD to respond
 lcd_wait:
     pha
@@ -105,7 +172,7 @@ lcd_wait:
     sta PORTA
     lda PORTB       ; Read from Port B
     and #RDY        ; Mask Instruction Ready bit
-    bne .lcd_busy    ; Look again if not ready
+    bne .lcd_busy   ; Look again if not ready
     lda #RW         ; Reset Enable bit
     sta PORTA       ; "
     lda #%11111111  ; Set all pins on port B to output
@@ -142,6 +209,23 @@ print_hex:
     pha             ; And put it back
     jsr hex2char
     jsr print_char
+    pla
+    rts
+
+; Print string to LCD screen
+;   Input: x, y: low order, high order of message location
+print_str:
+    pha
+    stx MESSAGE     ; Store low order byte of message location
+    sty MESSAGE + 1 ; Store high order byte of message location
+    ldy #0          ; y register holds offset from start of string
+.print:
+    lda (MESSAGE),y ; Load offset y from location pointed to by MESSAGE
+    beq .done       ; Branch to done if we loaded null (0)
+    jsr print_char  ; print the character loaded
+    iny             ; prep for the next character
+    jmp .print      ; loop back for next character
+.done:
     pla
     rts
 
@@ -187,8 +271,29 @@ nmi:
     lda S           ; Restore the status register
     pha
 
+    ; Save the current state of the LCD
+    lda #<LCD_DATA  ; Copy low-order address of LCD saved data to vector
+    sta LCD_VEC
+    lda #>LCD_DATA  ; Copy high-order address of LCD saved data to vector
+    sta LCD_VEC + 1
+    jsr lcd_addr    ; Get LCD address counter into A
+    ldy #80
+    sta (LCD_VEC),y ; Save LCD address counter value
+    lda #%10000000  ; Set LCD address counter to 0
+    jsr lcd_instruction
+    ldy #79         ; Index to LCD saved data
+.get_lcd_byte
+    jsr lcd_read    ; Read next byte (and increment address counter)
+    sta (LCD_VEC),y ; Save data
+    dey             ; Decrement index and loop back until index goes negative
+    bpl .get_lcd_byte
+
     ; Publish results to the LCD
     jsr lcd_init
+    lda #%00001100 ; LCD display control; display off; Cursor on; no blink cursor
+    jsr lcd_instruction
+    lda #%00000110 ; LCD cursor contol; Increment cursor position; no scroll
+    jsr lcd_instruction
     jsr lcd_clear
 
     lda A
@@ -206,7 +311,7 @@ nmi:
     lda #" "
     jsr print_char
 
-; Output flag or "-" for each of NVBDIZC
+; Print flag or "-" for each of NVBDIZC
 .n_flag
     lda S           ; Load the status register
     and #%10000000  ; Mask the flag of interest
@@ -318,16 +423,31 @@ nmi:
     lda SV
     jsr print_hex
 
+    .byte $cb       ; Wait for interrupt; wdc65c02 instruction
+    lda #%10000000  ; Set LCD address counter to 0
+    jsr lcd_instruction
+    ldy #79         ; Index to LCD saved data
+.print_lcd_byte
+    lda (LCD_VEC),y ; Recover LCD data
+    jsr print_char  ; Print to LC
+    dey             ; Decrement index and loop back until index goes negative
+    bpl .print_lcd_byte
+    ldy #80
+    lda (LCD_VEC),y ; Load value of LCD address counter
+    ora #%10000000  ; Set Address command bit and set LCD address counter
+    jsr lcd_instruction
+    jsr lcd_init    ; Initialize LCD back to primary mode
+    .byte $cb       ; Wait for interrupt; wdc65c02 instruction
+
     ; Restore Registers to original values
     lda A
     ldx X
     ldy Y
 
-    .byte $cb       ; Wait for interrupt; wdc65c02 instruction
     rti
 
 irq:
-    jmp irq
+    rti
 
     .org VECTORS
     .word nmi

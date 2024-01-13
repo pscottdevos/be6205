@@ -33,7 +33,8 @@ reset:
     sta REG1
     sta REG2
 
-    lda #$01            ; Set test value to 1 (bit 0 set)
+    lda #$00            ; Set test value
+    sta VAL
 
 start_test:
     ldx #>FILL_START    ; Set X to high-order byte of start location
@@ -45,10 +46,11 @@ start_test:
     stx LOC + 1         ;   high order byte
     lda VAL             ; Load test value
     sta (LOC),y         ; Save test value to test location
+    lda #0              ; Clear the data lines
     lda (LOC),y         ; Load test value from test location
-    sta REG0            ; Store test value loaded to register
-    stx REG1            ; Store high-order byte of test location to register
-    sty REG2            ; Store low-order byte of test location to register
+    stx REG0            ; Store test value loaded to register
+    sty REG1            ; Store high-order byte of test location to register
+    sta REG2            ; Store low-order byte of test location to register
     cmp VAL             ; Check if value matches test value
     bne stop            ; If not equal stop
     iny                 ; Increment Y to next test memorty location
@@ -58,28 +60,25 @@ start_test:
     cmp #FILL_STOP_PAGE ; Compare with stop page (we test *up to* stop page)
     bne .loop1          ; If not yet at stop page, loop back
 
-    inc VAL
-    jmp start_test
+    ; This is to test that writing to the ports does not affect what is in RAM
+    ;lda VAL             ; Load the test value
+    ;eor #%11111111      ; Invert all the bits of the test value
+    ;sta PORTB           ; Store inverted-bit value to port B
+    ;sta PORTA           ; Store inverted-bit value to port A
+    ;sta DDRB            ; Store inverted-bit value to data direction register B
+    ;sta DDRA            ; Store inverted-bit value to data direction register A
 
     ldx #>FILL_START    ; Set X to high-order byte of start location again
     ldy #<FILL_START    ; Set Y to low-order byte of start location again
-
-    ; This is to test that writing to the ports does not affect what is in RAM
-    lda VAL             ; Load the test value
-    eor #%11111111      ; Invert all the bits of the test value
-    sta PORTB           ; Store inverted-bit value to port B
-    sta PORTA           ; Store inverted-bit value to port A
-    sta DDRB            ; Store inverted-bit value to data direction register B
-    sta DDRA            ; Store inverted-bit value to data direction register A
 
 .loop2:
     lda #0              ; Store current page to LOC
     sta LOC             ;   low-order byte
     stx LOC + 1         ;   high-order byte
     lda (LOC),y         ; Load test value from test location
-    sta REG0            ; Store test value loaded to register
-    stx REG1            ; Store high-order byte of test location to register
-    sty REG2            ; Store low-order byte of test location to register
+    stx REG0            ; Store test value loaded to register
+    sty REG1            ; Store high-order byte of test location to register
+    sta REG2            ; Store low-order byte of test location to register
     cmp VAL             ; Check if value matches test value
     bne stop            ; If not equal stop
     iny                 ; Increment Y to next test memorty location
@@ -89,23 +88,16 @@ start_test:
     cmp #FILL_STOP_PAGE ; Compare with stop page (we test *up to* stop page)
     bne .loop2          ; If not yet at stop page, loop back
 
-.rotate:
-    lda VAL             ; Load test value
-    bne .do_clc         ; If not zero, branch
-    sec                 ; else set carry
-    jmp .rol_val        ; Jump past clear carry
-.do_clc:
-    clc                 ; clear carry
-.rol_val:
-    rol VAL             ; Rotate test value
+.change_val:
+    inc VAL
 
     jmp start_test      ; Run tests forever (unless a test fails)
 
 
 stop:
-    sta REG0            ; Store test value loaded to register
-    stx REG1            ; Store high-order byte of test location to register
-    sty REG2            ; Store low-order byte of test location to register
+    stx REG0            ; Store test value loaded to register
+    sty REG1            ; Store high-order byte of test location to register
+    sta REG2            ; Store low-order byte of test location to register
 
 stay
     jmp stay
