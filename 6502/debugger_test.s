@@ -170,7 +170,6 @@ nmi:
     sta S
     pla             ; Save the program counter
     sta PC          ;   low-order address
-    tax
     pla             ;   high-order address
     sta PC + 1
     tsx             ; Save the stack pointer (position prior to NMI)
