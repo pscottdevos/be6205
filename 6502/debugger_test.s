@@ -30,52 +30,71 @@ LCD_VEC = $fe   ; Address of saved LCD data (for indirect, indexed addressing)
 A = $1fff           ; A register
 X = $1ffe           ; X register
 Y = $1ffd           ; Y register
-S = $1ffa           ; Status register
 PC = $1ffb          ; Program Counter; 2 bytes
+S = $1ffa           ; Status register
 SP = $1ff9          ; Stack Pointer
 SV = $1ff8          ; Value at Stack Pointer
 LCD_DATA = SV - 81  ; Reserve 81 (decimal) bytes for LCD data
 
 
     .org ROM
+
 reset:
     ldx #$ff        ; Set top of stack pointer
     txs
     jsr lcd_init
     jsr lcd_clear
-    ldx #<msg1      ; print hello world message
-    ldy #>msg1
-    jsr print_str
-    ldx #<msg2      ; print additional message
-    ldy #>msg2
+
+    lda #"W"
+    jsr print_char
+
+    .byte $cb
+
+    lda #"i"
+    jsr print_char
+
+    lda #"t"
+    jsr print_char
+
+    lda #"n"
+    jsr print_char
+
+    lda #"e"
+    jsr print_char
+
+    lda #"s"
+    jsr print_char
+
+    lda #"s"
+    jsr print_char
+
+    lda #" "
+    jsr print_char
+
+    lda #"m"
+    jsr print_char
+
+    lda #"e"
+    jsr print_char
+
+    lda #"!"
+    jsr print_char
+
+    lda #"!"
+    jsr print_char
+
+    lda #"!"
+    jsr print_char
+
+    ldx #<msg
+    ldy #>msg
     jsr print_str
 
 .loop
-    lda #$5a
-    clc
-    adc #$5a        ; Should set overflow flag
-    ldx #$ff        ; Should set negative flag
-    ldy #$a5
-    lda #$ff
-    adc #$01        ; Should set carry flag
-    lda #$55
-    pha
-    lda #$aa
-    pha
-    lda #$ff
-    pha
-    lda #$00
-    pha
-    pla
-    pla
-    pla
-    pla
     jmp .loop
 
-msg1:
-    .asciiz "Witness Me!!!                           "
-msg2
-    .asciiz "Shiny and Chrome"
+msg
+    .asciiz "                           Shiny and Chrome"
 
 
     .org NODEBUG
@@ -270,6 +289,10 @@ nmi:
     lda S           ; Restore the status register
     pha
 
+    ; Stop here to allow user to see what's on the LCD screen before we replace
+    ; it with the dubugging data
+    .byte $cb       ; Wait for interrupt; wdc65c02 instruction
+
     ; Save the current state of the LCD
     lda #<LCD_DATA  ; Copy low-order address of LCD saved data to vector
     sta LCD_VEC
@@ -436,7 +459,6 @@ nmi:
     ora #%10000000  ; Set Address command bit and set LCD address counter
     jsr lcd_instruction
     jsr lcd_init    ; Initialize LCD back to primary mode
-    .byte $cb       ; Wait for interrupt; wdc65c02 instruction
 
     ; Restore Registers to original values
     lda A
