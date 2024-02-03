@@ -71,7 +71,7 @@ def write_rom(fp: BufferedWriter, device: str, start: bytes):
 if __name__ == '__main__':
 
     parser = ArgumentParser(
-        prog='TommyPROM binary ROM file writer',
+        prog='writerom.py',
         description='Writes binary ROM file to TommyPROM EEPROM writer'
     )
     parser.add_argument('filename', help="Path to binary file to write.")
