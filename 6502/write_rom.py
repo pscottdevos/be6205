@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+import io
 import serial
 import sys
 import time
@@ -19,7 +20,7 @@ def read_response(dev: BufferedRandom):
     return response.decode('ascii')
 
 
-def write_rom(fp: BufferedWriter, device: str, start: bytes):
+def write_rom(fp: BufferedWriter, device: str, start: int):
     # Report BAUD rate to user
     sys.stdout.write(f'Sending at {BAUD_RATE} BAUD\n')
     # Open Serial Device to connect to TommyPROM
@@ -55,7 +56,7 @@ def write_rom(fp: BufferedWriter, device: str, start: bytes):
         sys.stdout.write(read_response(dev))
 
         # Issue command to start writing at start address
-        dev.write(b'w' + start + b'\r')
+        dev.write(b'w' + hex(start).encode('ascii')[2:] + b'\r')
         # w command returns text that doesn't end in a prompt (>)
         sys.stdout.write(dev.readline().decode('ascii'))
         sys.stdout.write(dev.readline().decode('ascii'))
@@ -67,24 +68,47 @@ def write_rom(fp: BufferedWriter, device: str, start: bytes):
             f'\n\nResult of Transmission: {"OK" if success else "ERROR"}\n'
         )
 
+def make_int(value: str) -> int:
+    if len(value) < 1 or value is None:
+        return 0
+    if value.startswith('0x'):
+        return int(value[2:], base=16)
+    else:
+        return int(value)
+
 
 if __name__ == '__main__':
 
     parser = ArgumentParser(
-        prog='TommyPROM binary ROM file writer',
+        prog='writerom.py',
         description='Writes binary ROM file to TommyPROM EEPROM writer'
     )
     parser.add_argument('filename', help="Path to binary file to write.")
+    parser.add_argument('-b', '--bytes',
+        default='', help='Number of bytes to write'
+    )
     parser.add_argument('-d', '--device',
         default='/dev/ttyUSB0', help="path to serial (usb) device."
     )
+    parser.add_argument('-o', '--offset',
+        default='0', help='Offset from start of file to start writing')
     parser.add_argument('-s', '--start',
-        default='0', help='Starting memory location on EEPROM in hex'
+        default='0', help='Starting memory address on EEPROM'
     )
+    parser.add_argument('-r', '--rom-size',
+        default='32', help='ROM size in kilobytes')
     args = parser.parse_args()
 
+    offset = make_int(args.offset)
+    device = args.device
+    start_addr = make_int(args.start)
+    rom_size = make_int(args.rom_size) * 1024
+    max_bytes = rom_size - start_addr
+    write_bytes = min(max_bytes, make_int(args.bytes) or max_bytes)
+    write_bytes = int(write_bytes/128) * 128 + bool(write_bytes % 128) * 128
+
     with open(args.filename, 'rb') as infile:
-        device = args.device
-        start_addr = args.start.encode('ascii')
+        buffer = infile.read()
+    with io.BytesIO(buffer[offset:offset + write_bytes]) as infile:
         write_rom(infile, device, start_addr)
 

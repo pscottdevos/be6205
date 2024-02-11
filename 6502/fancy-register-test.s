@@ -20,6 +20,15 @@ VECTORS = $fffa
 ; Constants
 Cycles = 5      ; (decimal) Number of times to run each test in each loop
 
+; Define middle wait loop based on speed of processor (in Mhz)
+    .ifndef clk_sp
+clk_sp = 10
+    .endif
+
+WAIT_TIME = 25.5 * clk_sp
+
+
+
 ; LCD Controller-related contants
 E = %10000000   ; LCD controller Enable bit
 RW = %01000000  ; LCD controller RW bit
@@ -242,18 +251,18 @@ print_str:
 ; Wait time specified in A register
 ;   Input: A register - timer value to wait
 wait:
-    sta WT_TIME ; Store at WT_TIME address
+    sta WT_TIME     ; Store at WT_TIME address
 .loop2
-    ldy #$00    ; loop y 256 times
+    ldy #WAIT_TIME  ; loop speed-related number of times
 .loop1
-    ldx #$00    ; loop x 256 times
+    ldx #$00        ; loop x 256 times
 .loop0
-    dex         ; dec x and...
-    bne .loop0  ;   inner loop until zero
-    dey         ; dec y and...
-    bne .loop1  ;   middle loop until zero
-    dec WT_TIME ; dec value at WT_TIME and...
-    bne .loop2  ;   outer loop until zero
+    dex             ; dec x and...
+    bne .loop0      ;   inner loop until zero
+    dey             ; dec y and...
+    bne .loop1      ;   middle loop until zero
+    dec WT_TIME     ; dec value at WT_TIME and...
+    bne .loop2      ;   outer loop until zero
     rts
 
 
