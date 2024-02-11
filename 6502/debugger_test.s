@@ -48,8 +48,6 @@ reset:
     lda #"W"
     jsr print_char
 
-    .byte $cb
-
     lda #"i"
     jsr print_char
 
@@ -89,6 +87,9 @@ reset:
     ldx #<msg
     ldy #>msg
     jsr print_str
+
+    .byte $cb
+    jsr lcd_clear
 
 .loop
     jmp .loop
