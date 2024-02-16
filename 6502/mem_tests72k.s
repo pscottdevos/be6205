@@ -12,7 +12,7 @@ CSR = %00000110 ; LCD cursor contol; Increment cursor position; no scroll
 
 ; Zero page variables
 LOC = $00           ; Page of memory under test; 2 bytes
-VAL = $02           ; Test value; 1 byte
+VAL = $02           ; "Raw" test value; 1 byte
 START_PAGE = $03    ; Page at which to start testing; 1 byte
 STOP_PAGE = $04     ; Page at which to stop testing; 1 byte
 ; Block is 8k range within 32k video memory chip
@@ -81,7 +81,6 @@ reset:
     sta STOP_PAGE
     lda #$0         ; Set inital test value to zero
     sta VAL
-    lda #$00
 
     jsr test_block  ; Test system memory
 
@@ -92,7 +91,6 @@ reset:
     sta BLK_SEL
 .block_loop
     jsr set_video_reg   ; Set the video register bank and block
-    .byte $cb
     lda #>VID_RAM       ; Set start page for Video RAM
     sta START_PAGE
     lda #>RSV_ADDR      ; Set stop page for Video RAM
@@ -105,9 +103,13 @@ reset:
     inc BLK_SEL         ; Move to next block
     cmp #$04            ; Have we tested all four blocks?
     bne .block_loop     ; If not, loop back
+    lda #$0
+    sta BLK_SEL
     inc BNK_SEL         ; Move to next bank
-    cmp #$02            ; Have we tested both banks?
-    bne .block_loop     ; If not, loop back 
+    bne .block_loop     ; Loop back
+
+    .byte $cb           ; Wait for button press
+    jmp reset           ; Start over
     
 
 ; Set video register bank and block
@@ -115,7 +117,8 @@ reset:
 ;           BLK_SEL     Video RAM block 0 - 3
 set_video_reg:
     pha
-    lda BNK_SEL
+    lda BNK_SEL         ; Load bank selection
+    and #%00000001      ; Only interested in low order bit
     beq .bg
     lda #%01000000      ; Set for FG RAM
     jmp .set_blk
@@ -188,10 +191,13 @@ test_block:
     rts
 
 ; Print current test value and address to LCD
+;   Vars:   VAL - "raw" test value
+;           BLK_SEL - memory chip selection
+;           BNK_sEL - 8k bank selection
 print_status:
     lda #%10101000  ; Set LCD address counter to start of second line
     jsr lcd_instruction
-    lda VAL
+    lda VAL         ; Print "raw" test value
     jsr print_hex
     lda #" "
     jsr print_char
@@ -199,14 +205,20 @@ print_status:
     jsr print_hex
     tya
     jsr print_hex
+    lda #" "
+    jsr print_char
+    lda BNK_SEL
+    jsr print_hex
+    lda #":"
+    jsr print_char
+    lda BLK_SEL
+    jsr print_hex
     rts
-    lda #" "
-    jsr print_char
-    lda #" "
-    jsr print_char
 
 ; Print errors to LCD
-;   Input: A register - Computed test value
+;   Input:  A register - Computed test value
+;   Vars:   VAL - "raw" test value
+;           ERRORS - 2 byte number of errors encountered
 print_errors:
     pha             ; Save A reg on stack for later
     lda #%10000000  ; Set LCD address counter to start of first line
@@ -245,8 +257,9 @@ print_errors:
     jsr print_char
     lda #" "
     jsr print_char
-    .byte $cb       ; Wait for IRQ button press
+    .byte $cb       ; Wait for interrupt; wdc65c02 instruction
     rts
+
 
     .org NODEBUG
 ; Subroutine Library
