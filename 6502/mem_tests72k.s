@@ -101,11 +101,14 @@ reset:
     jsr test_block      ; Test video RAM block
 
     inc BLK_SEL         ; Move to next block
+    lda BLK_SEL         ; Load BLK_SEL into A to test it.
     cmp #$04            ; Have we tested all four blocks?
     bne .block_loop     ; If not, loop back
     lda #$0
     sta BLK_SEL
-    inc BNK_SEL         ; Move to next bank
+    inc BNK_SEL         ; Move to FG bank
+    lda BNK_SEL
+    cmp #$02            ; Done after BG and FG tested
     bne .block_loop     ; Loop back
 
     .byte $cb           ; Wait for button press
@@ -188,6 +191,7 @@ test_block:
     bne .read_page  ; Loop back until STOP_PAGE is reached
     inc VAL         ; Increment value by one
     bne test_block  ; Loop back to test entire block with next test value
+    nop
     rts
 
 ; Print current test value and address to LCD
@@ -195,8 +199,12 @@ test_block:
 ;           BLK_SEL - memory chip selection
 ;           BNK_sEL - 8k bank selection
 print_status:
-    lda #%10101000  ; Set LCD address counter to start of second line
+    lda #%10000000  ; Set LCD address counter to start of first line
     jsr lcd_instruction
+    lda ERRORS
+    jsr print_hex
+    lda #" "
+    jsr print_char
     lda VAL         ; Print "raw" test value
     jsr print_hex
     lda #" "
@@ -221,7 +229,7 @@ print_status:
 ;           ERRORS - 2 byte number of errors encountered
 print_errors:
     pha             ; Save A reg on stack for later
-    lda #%10000000  ; Set LCD address counter to start of first line
+    lda #%10101000  ; Set LCD address counter to start of second line
     jsr lcd_instruction
     lda #"V"
     jsr print_char
@@ -245,19 +253,6 @@ print_errors:
     jsr print_hex 
     tya
     jsr print_hex
-    lda #%10101000  ; Set LCD address counter to start of second line
-    jsr lcd_instruction
-    lda #"E"
-    jsr print_char
-    lda ERRORS + 1
-    jsr print_hex
-    lda ERRORS
-    jsr print_hex
-    lda #" "        ; Print a couple of spaces to overwrite status address
-    jsr print_char
-    lda #" "
-    jsr print_char
-    .byte $cb       ; Wait for interrupt; wdc65c02 instruction
     rts
 
 
