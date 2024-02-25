@@ -2,17 +2,17 @@
 
 from io import IOBase
 
-#   7   6   5   4   3   2   1   0
-#   DI  BI  VCR HCR VBI HBI VSY HSY
-#   |   |   |   |   |   |   |   |
-#   |   |   |   |   |   |   |   |___Horizontal Sync
-#   |   |   |   |   |   |   |_______Vertical Sync
-#   |   |   |   |   |   |___________Horizontal Blank Interval
-#   |   |   |   |   |_______________Vertical Blank Interval
-#   |   |   |   |___________________Horizontal Counter Reset
-#   |   |   |_______________________Vertical Counter Reset
-#   |   |___________________________Blank Iterval
-#   |_______________________________Display Interval
+#   7   6   5    4    3   2   1    0
+#   DI  BI  VCRB HCRB VBI HBI VSYB HSYB
+#   |   |   |    |    |   |   |    |
+#   |   |   |    |    |   |   |    |___Horizontal Sync
+#   |   |   |    |    |   |   |________Vertical Sync
+#   |   |   |    |    |   |____________Horizontal Blank Interval
+#   |   |   |    |    |________________Vertical Blank Interval
+#   |   |   |    |_____________________Horizontal Counter Reset
+#   |   |   |__________________________Vertical Counter Reset
+#   |   |______________________________Blank Iterval
+#   |__________________________________Display Interval
 
 # Control Bits
 HSY = 0b00000001
