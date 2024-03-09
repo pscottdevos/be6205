@@ -1,14 +1,15 @@
 ; Zero page variables
+PC = $fc        ; Program Counter; 2 bytes
 LCD_VEC = $fe   ; Address of saved LCD data (for indirect, indexed addressing)
 
 ; Debugger variables
 A = $1fff           ; A register
 X = $1ffe           ; X register
 Y = $1ffd           ; Y register
-PC = $1ffb          ; Program Counter; 2 bytes
 S = $1ffa           ; Status register
 SP = $1ff9          ; Stack Pointer
-SV = $1ff8          ; Value at Stack Pointer
+SV1 = $1ff8         ; Value at Stack Pointer plus one
+SV = $1ff7          ; Value at Stack Pointer
 LCD_DATA = SV - 81  ; Reserve 81 (decimal) bytes for LCD data
 
 nmi:
@@ -26,9 +27,14 @@ nmi:
     stx SP
     pla             ; Save the value at the stack pointer
     sta SV
+    pla             ; Save the value at stack pointer plus one
+    sta SV1
+
 
     ; Restore stack
-    pha             ; Restore the value at the stack pointer
+    pha             ; Restore the value at the stack pointer plus one
+    lda SV          ; Restore the value at the stack pointer
+    pha
     lda PC + 1      ; Restore the program counter; low order address
     pha
     lda PC          ; Restore the program counter; high order address
@@ -48,8 +54,8 @@ nmi:
     jsr lcd_addr    ; Get LCD address counter into A
     ldy #80
     sta (LCD_VEC),y ; Save LCD address counter value
-    lda #%10000000  ; Set LCD address counter to 0
-    jsr lcd_instruction
+    lda #0          ; Set LCD address counter to 0
+    jsr lcd_set_addr
     ldy #79         ; Index to LCD saved data
 .get_lcd_byte
     jsr lcd_read    ; Read next byte (and increment address counter)
@@ -159,42 +165,33 @@ nmi:
     jsr print_char
 
 .done_flags
-    ldx #40 - 16    ; Print spaces to get to next line
-    lda #" "
-.next_char
-    jsr print_char
-    dex
-    bne .next_char
+    lda #40
+    jsr lcd_set_addr
 
-    lda #"P"        ; Program counter; 6 chars including space
-    jsr print_char
-    lda #"C"
-    jsr print_char
-    lda #":"
-    jsr print_char
-    lda PC + 1
+    lda PC + 1      ; Program counter; 5 chars including colon
     jsr print_hex
     lda PC
     jsr print_hex
+    lda #":"
+    jsr print_char
+    ldx #0          ; Value at program counter; 3 chars including space
+    lda (PC,X)
+    jsr print_hex
     lda #" "
     jsr print_char
 
-    lda #"S"        ; Stack pointer and value; 5 chars including space
-    jsr print_char
-    lda #"P"
-    jsr print_char
-    lda #":"
-    jsr print_char
-    lda SP
+    lda SP          ; Stack pointer; 3 chars including slash
     jsr print_hex
     lda #"/"
     jsr print_char
+    lda SV1
+    jsr print_hex
     lda SV
     jsr print_hex
 
     .byte $cb       ; Wait for interrupt; wdc65c02 instruction
-    lda #%10000000  ; Set LCD address counter to 0
-    jsr lcd_instruction
+    lda #0          ; Set LCD address counter to 0
+    jsr lcd_set_addr
     ldy #79         ; Index to LCD saved data
 .print_lcd_byte
     lda (LCD_VEC),y ; Recover LCD data

@@ -31,21 +31,25 @@ reset:
     sta ERRORS + 1
 
 .system_ram
-    lda #%11000000  ; Deselect video RAM
+    lda #$0             ; Select no video RAM
+    sta BNK_SEL
+    sta BLK_SEL
+    jsr set_video_reg   ; Set the video register bank and block
+    lda #%11000000      ; Deselect video RAM
     sta VID_RAM_REG
-    lda #>SYS_RAM   ; Set start page for system RAM
+    lda #>SYS_RAM       ; Set start page for system RAM
     sta START_PAGE
-    lda #>VID_RAM-1 ; Stop one shy of vid ram to not overwrite debug vars
+    lda #>VID_RAM-1     ; Stop one shy of vid ram to not overwrite debug vars
     sta STOP_PAGE
-    lda #$0         ; Set inital test value to zero
+    lda #$0             ; Set inital test value to zero
     sta VAL
 
-    jsr test_block  ; Test system memory
+    jsr test_block      ; Test system memory
 
 .video_ram
-    lda #$0         ; Select BG RAM
+    lda #$1             ; Select BG RAM
     sta BNK_SEL
-    lda #$0         ; Select lowest block
+    lda #$0             ; Select lowest block
     sta BLK_SEL
 .block_loop
     jsr set_video_reg   ; Set the video register bank and block
@@ -66,7 +70,7 @@ reset:
     sta BLK_SEL
     inc BNK_SEL         ; Move to FG bank
     lda BNK_SEL
-    cmp #$02            ; Done after BG and FG tested
+    cmp #$03            ; Done after BG and FG tested
     bne .block_loop     ; Loop back
 
     .byte $cb           ; Wait for button press
@@ -124,22 +128,26 @@ test_block:
     iny             ; Get next address
     bne .read_page  ; Loop back until we roll over to zero
     jsr print_status; Print current value and address
+
     inx             ; Increment x to next page
     txa             ; Transfer page number to A
     cmp STOP_PAGE   ; Compare with stop page (we test *up to* stop page)
     bne .read_page  ; Loop back until STOP_PAGE is reached
     inc VAL         ; Increment value by one
     bne test_block  ; Loop back to test entire block with next test value
-    nop
     rts
 
 ; Print current test value and address to LCD
+;   Input:  X - high order byte of address under test
+;           Y - low order byte of address under test
 ;   Vars:   VAL - "raw" test value
 ;           BLK_SEL - memory chip selection
 ;           BNK_sEL - 8k bank selection
 print_status:
     lda #0               ; Set LCD address counter to start of first line
     jsr lcd_set_addr
+    lda ERRORS + 1
+    jsr print_hex
     lda ERRORS
     jsr print_hex
     lda #" "
@@ -149,8 +157,6 @@ print_status:
     lda #" "
     jsr print_char
     txa
-    jsr print_hex
-    tya
     jsr print_hex
     lda #" "
     jsr print_char
