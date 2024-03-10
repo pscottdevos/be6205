@@ -3,16 +3,16 @@
 from io import IOBase
 
 #   7   6   5    4    3   2   1    0
-#   DI  BI  VCRB HCRB BIE BIS VSYB HSYB
+#   VBI BI  VCRB HCRB BIE BIS VSYB HSYB
 #   |   |   |    |    |   |   |    |
-#   |   |   |    |    |   |   |    |___Horizontal Sync Bar
-#   |   |   |    |    |   |   |________Vertical Sync Bar
-#   |   |   |    |    |   |____________Blank Interval Starting (Now)
-#   |   |   |    |    |________________Blank Interval Ending (Soon)
-#   |   |   |    |_____________________Horizontal Counter Reset Bar
-#   |   |   |__________________________Vertical Counter Reset Bar
-#   |   |______________________________Blank Iterval
-#   |__________________________________Display Interval
+#   |   |   |    |    |   |   |    |___ Horizontal Sync Bar
+#   |   |   |    |    |   |   |________ Vertical Sync Bar
+#   |   |   |    |    |   |____________ Blank Interval Starting (Now)
+#   |   |   |    |    |________________ Blank Interval Ending (Soon)
+#   |   |   |    |_____________________ Horizontal Counter Reset Bar
+#   |   |   |__________________________ Vertical Counter Reset Bar
+#   |   |______________________________ Blank Iterval
+#   |__________________________________ Vertical Blank Interval
 
 # Control Bits
 HSY = 0b00000001
@@ -22,7 +22,7 @@ BIE = 0b00001000
 HCR = 0b00010000
 VCR = 0b00100000
 BI  = 0b01000000
-DI  = 0b10000000
+VBI = 0b10000000
 
 # Inverted (XOR with 255 reverses all bits)
 HSY_INV = HSY ^ 255
@@ -52,32 +52,32 @@ i   Sets the horizontal-related bits of the signals
     y: vertical counter value
     signals: signal bits
     """
-    # H Display Interval
+    # Horizontal Display Interval
     if x < HBI_START:
         # Pulse BIS at the start of the first line of the vertical blank
         # interval
         if y == VBI_START and x == 0:
             signals |= BIS
-    # H Front Porch
+    # Horizontal Front Porch
     elif x < HSY_START:
         # Pulse BIS at the start of the horizontal blank interval except
         # during the vertical blank interval
         if y < VBI_START and x == HBI_START:
             signals |= BIS
         signals |= BI
-    # H Sync
+    # Horizontal Sync
     elif x < HSY_END:
         signals |= BI
         signals &= HSY_INV # hsync sig is inverted
-    # H Back Porch
+    # Horizontal Back Porch
     elif x < HBI_END:
         # Pulse BIE near the end of the horizontal blank interval except
         # during the vertical blanking interval lines prior to the last line
         # I.e. do pulse on the last line of the VBI
-        if (y < VBI_START or y == VBI_END) and x == HBI_END - irq_recovery_time:
+        if (y < VBI_START or y == VBI_END) and x == HBI_END - irq_recovery_time - 1:
             signals |= BIE
         signals |= BI
-    # H Counter Reset
+    # Horizontal Counter Reset
     else:
         # Just need one horizontal counter reset normally, but in case system
         # power up at an address "between" scan lines, want to reset HCR to
@@ -98,26 +98,24 @@ def main(outfile: str):
                 # horizontal and vertical counter reset also set by default
                 signals = HSY | VSY | HCR | VCR
 
-                # V Display Interval
+                # Vertical Display Interval
                 if y < VBI_START:
-                    # H Display Interval
-                    if x < HBI_START:
-                        signals |= DI
-                    signals = set_H_bits(x, signals)
-                # V Front Porch
+                    # V Display Interval
+                    signals = set_H_bits(x, y, signals)
+                # Vertical Front Porch
                 elif y < VSY_START:
-                    signals |= BI | BIE
-                    signals = set_H_bits(x, signals)
-                # V Sync
+                    signals |= BI | VBI
+                    signals = set_H_bits(x, y, signals)
+                # Vertical Sync
                 elif y < VSY_END:
-                    signals |= BI | BIE
+                    signals |= BI | VBI
                     signals &= VSY_INV # vsync sig is inverted
-                    signals = set_H_bits(x, signals)
-                # V Back Porch
+                    signals = set_H_bits(x, y, signals)
+                # Vertical Back Porch
                 elif y < VBI_END:
-                    signals |= BI | BIE
-                    signals = set_H_bits(x, signals)
-                # V Counter Reset
+                    signals |= BI | VBI
+                    signals = set_H_bits(x, y, signals)
+                # Vertical Counter Reset
                 else:
                     # Just need one vertical reset byte normally, but system
                     # could start at power up with any random address, so best
