@@ -3,12 +3,12 @@
 from io import IOBase
 
 #   7   6   5    4    3   2   1    0
-#   VBI BI  VCRB HCRB BIE BIS VSYB HSYB
+#   VBI BI  VCRB HCRB RES VBS VSYB HSYB
 #   |   |   |    |    |   |   |    |
 #   |   |   |    |    |   |   |    |___ Horizontal Sync Bar
 #   |   |   |    |    |   |   |________ Vertical Sync Bar
-#   |   |   |    |    |   |____________ Blank Interval Starting (Now)
-#   |   |   |    |    |________________ Blank Interval Ending (Soon)
+#   |   |   |    |    |   |____________ Video Blank Interval Starting
+#   |   |   |    |    |________________ Reserved (unused)
 #   |   |   |    |_____________________ Horizontal Counter Reset Bar
 #   |   |   |__________________________ Vertical Counter Reset Bar
 #   |   |______________________________ Blank Iterval
@@ -17,8 +17,8 @@ from io import IOBase
 # Control Bits
 HSY = 0b00000001
 VSY = 0b00000010
-BIS = 0b00000100
-BIE = 0b00001000
+VBS = 0b00000100
+RES = 0b00001000
 HCR = 0b00010000
 VCR = 0b00100000
 BI  = 0b01000000
@@ -45,7 +45,7 @@ VBI_END   = 244     # End of Vertical Blank Interval
 irq_recovery_time = 2   # The number of horz counter periods to "pad" the end
                         # the end of of the blank interval for the BIE signal
 
-def set_H_bits(x: int, y: int, signals: int):
+def set_H_bits(x: int, signals: int):
     """
 i   Sets the horizontal-related bits of the signals
     x: horizontal counter value
@@ -54,16 +54,9 @@ i   Sets the horizontal-related bits of the signals
     """
     # Horizontal Display Interval
     if x < HBI_START:
-        # Pulse BIS at the start of the first line of the vertical blank
-        # interval
-        if y == VBI_START and x == 0:
-            signals |= BIS
+        pass
     # Horizontal Front Porch
     elif x < HSY_START:
-        # Pulse BIS at the start of the horizontal blank interval except
-        # during the vertical blank interval
-        if y < VBI_START and x == HBI_START:
-            signals |= BIS
         signals |= BI
     # Horizontal Sync
     elif x < HSY_END:
@@ -71,11 +64,6 @@ i   Sets the horizontal-related bits of the signals
         signals &= HSY_INV # hsync sig is inverted
     # Horizontal Back Porch
     elif x < HBI_END:
-        # Pulse BIE near the end of the horizontal blank interval except
-        # during the vertical blanking interval lines prior to the last line
-        # I.e. do pulse on the last line of the VBI
-        if (y < VBI_START or y == VBI_END) and x == HBI_END - irq_recovery_time - 1:
-            signals |= BIE
         signals |= BI
     # Horizontal Counter Reset
     else:
@@ -101,20 +89,20 @@ def main(outfile: str):
                 # Vertical Display Interval
                 if y < VBI_START:
                     # V Display Interval
-                    signals = set_H_bits(x, y, signals)
+                    signals = set_H_bits(x, signals)
                 # Vertical Front Porch
                 elif y < VSY_START:
                     signals |= BI | VBI
-                    signals = set_H_bits(x, y, signals)
+                    signals = set_H_bits(x, signals)
                 # Vertical Sync
                 elif y < VSY_END:
                     signals |= BI | VBI
                     signals &= VSY_INV # vsync sig is inverted
-                    signals = set_H_bits(x, y, signals)
+                    signals = set_H_bits(x, signals)
                 # Vertical Back Porch
                 elif y < VBI_END:
                     signals |= BI | VBI
-                    signals = set_H_bits(x, y, signals)
+                    signals = set_H_bits(x, signals)
                 # Vertical Counter Reset
                 else:
                     # Just need one vertical reset byte normally, but system
@@ -122,6 +110,11 @@ def main(outfile: str):
                     # to reset HCR and VCR until the end of the address space
                     signals &= VCR_INV
                     signals &= HCR_INV
+
+                # Pulse VBS at the start of the first line of the vertical blank
+                # interval
+                if y == VBI_START and x in range(0, 4):
+                    signals |= VBS
 
                 fp.write(bytes([signals]))
 

@@ -2,9 +2,13 @@
 
 LOC = $00           ; Page of memory under test; 2 bytes
 VAL = $02           ; "Raw" test value; 1 byte
-ERRORS = $07        ; Total Errors; 2 bytes
 START_PAGE = $03    ; Page at which to start testing; 1 byte
-STOP_PAGE = $04     ; Page at which to stop testing; 1 byte
+STOP_PAGE  = $04    ; Page at which to stop testing; 1 byte
+JIFFIES = $05       ; Real-time clock 1/60th of seconds
+SECONDS = $06       ; Real-time clock seconds
+MINUTES = $07       ; Real-time clock minutes
+HOURS   = $08       ; Real-time clock hours
+ERRORS = $09       ; Total Errors; 2 bytes
 
 ; Constants
 
@@ -16,27 +20,30 @@ SYS_RAM = $0200     ; Starting location of testable system RAM block
 
     .org ROM
 
-irq:
-    rti
-
 reset:
     cld             ; Binary mode
     ldx #$ff        ; Set top of stack
     txs
-    sei
     jsr lcd_init    ; Initialize LCD
     jsr lcd_clear   ; Clear LCD screen
     lda #$00        ; Set total errors
     sta ERRORS
     sta ERRORS + 1
+    sta JIFFIES     ; Set real run-time to zero
+    sta SECONDS
+    sta MINUTES
+    sta HOURS
+    cli             ; enable interrupts
+
+.wait
+    jsr wait        ; Wait for resume button press
+
 
 .system_ram
-    lda #$0             ; Select no video RAM
+    lda #$0             ; Select no video RAM; high speed clock
     sta BNK_SEL
     sta BLK_SEL
     jsr set_video_reg   ; Set the video register bank and block
-    lda #%11000000      ; Deselect video RAM
-    sta VID_RAM_REG
     lda #>SYS_RAM       ; Set start page for system RAM
     sta START_PAGE
     lda #>VID_RAM-1     ; Stop one shy of vid ram to not overwrite debug vars
@@ -44,6 +51,7 @@ reset:
     lda #$0             ; Set inital test value to zero
     sta VAL
 
+    jsr zero_block
     jsr test_block      ; Test system memory
 
 .video_ram
@@ -60,6 +68,7 @@ reset:
     lda #$0             ; Set inital test value to zero
     sta VAL
 
+    jsr zero_block
     jsr test_block      ; Test video RAM block
 
     inc BLK_SEL         ; Move to next block
@@ -69,23 +78,45 @@ reset:
     lda #$0
     sta BLK_SEL
     inc BNK_SEL         ; Move to FG bank
-    lda BNK_SEL
-    cmp #$03            ; Done after BG and FG tested
-    bne .block_loop     ; Loop back
+    lda BNK_SEL         ; Load BNK_SEL to test it
+    cmp #$3             ; Have we moved past FG bank?
+    bne .block_loop     ; If not, loop back
+    jmp .system_ram     ; Start over
 
-    .byte $cb           ; Wait for button press
-    jmp reset           ; Start over
+
+; Zero a block of RAM
+;   Vars:   LOC         Current location of testing
+;           START_PAGE  Memory page at which to start test
+;           STOP_PAGE   Memory page *up to* which to test
+zero_block:
+    pha
+    ldx #START_PAGE ; Set X to high-order byte fo test start location
+    ldy #$0         ; Set Y to low-order byte of test start location
+.zero_page
+    lda #$0         ; Store current page to LOC
+    sta LOC         ;   low-order
+    stx LOC + 1     ;   high-order
+    sta (LOC),y     ; Store zero to current location
+    iny
+    bne .zero_page  ; Loop back for each address in page
+    inx             ; Increment to next page
+    txa             ; Transfer page number to accumulator
+    cmp STOP_PAGE   ; Compare with stop page (we test *up to* stop page)
+    bne .zero_page  ; If not yet at stop page, loop back
+    pla
+    rts
     
 
-; Test a block of RAM
+; Test an 8k block of RAM
 ;   Vars:   LOC         Current location of testing
 ;           VAL         Current value to compute value to store
 ;           START_PAGE  Memory page at which to start test
 ;           STOP_PAGE   Memory page *up to* which to test
 ;           ERRORS      Total errors
+;           BNK_SEL     Bank selection
 test_block:
     ldx #START_PAGE ; Set X to high-order byte of test start location
-    ldy #$0         ; Set X to low-order byte of test start location
+    ldy #$0         ; Set Y to low-order byte of test start location
     ; Write test data to block of RAM
 .write_page:
     lda #$0         ; Store current page to LOC
@@ -94,6 +125,15 @@ test_block:
     tya             ; Test-value at address is address low-order byte...
     clc             ;   ...plus test value; this gives diff val at each address
     adc VAL         ;   in page, but still tests all values at each address
+    pha             ; Save A register
+    lda BNK_SEL
+    cmp #$2         ; Test for FG RAM
+    bne .store_test_val ; Store value as-is for system and BG RAM
+    pla             ; Get stored value
+    and #FB_COL_PRV ; Mask out collision bit
+    pha             ; Push A register so it gets pulled below
+.store_test_val
+    pla
     sta (LOC),Y     ; Store to current test location
     iny
     bne .write_page ; Loop back for each address in page
@@ -113,6 +153,15 @@ test_block:
     clc             ;   ...plus test value; this gives diff val at each address
     adc VAL         ;   in page, but still tests all values at each address
     pha             ; Store value for error reporting
+    pha             ; Save A register for testing for errors
+    lda BNK_SEL
+    cmp #$2         ; Test for FG RAM
+    bne .read_test_val ; Store value as-is for system and BG RAM
+    pla             ; Get stored value
+    and #FB_COL_PRV ; Mask out collision bit
+    pha             ; Push A register so it gets pulled below
+.read_test_val
+    pla             ; Pull the test result value
     cmp (LOC),y     ; Compare with value at test location
     beq .passed     ; If test passes jump over error reporting
     clc
@@ -135,6 +184,7 @@ test_block:
     bne .read_page  ; Loop back until STOP_PAGE is reached
     inc VAL         ; Increment value by one
     bne test_block  ; Loop back to test entire block with next test value
+    jsr zero_block  ; Zero out the block
     rts
 
 ; Print current test value and address to LCD
@@ -144,7 +194,8 @@ test_block:
 ;           BLK_SEL - memory chip selection
 ;           BNK_sEL - 8k bank selection
 print_status:
-    lda #0               ; Set LCD address counter to start of first line
+    pha
+    lda #0          ; Set LCD address counter to start of first line
     jsr lcd_set_addr
     lda ERRORS + 1
     jsr print_hex
@@ -166,6 +217,29 @@ print_status:
     jsr print_char
     lda BLK_SEL
     jsr print_hex
+    lda #40
+    jsr lcd_set_addr
+    lda HOURS
+    jsr print_hex
+    lda #":"
+    jsr print_char
+    lda MINUTES
+    jsr print_hex
+    lda #":"
+    jsr print_char
+    lda SECONDS
+    jsr print_hex
+    lda #":"
+    jsr print_char
+    lda JIFFIES
+    jsr print_hex
+    lda #" "
+    jsr print_char
+    jsr print_char
+    jsr print_char
+    jsr print_char
+    jsr print_char
+    pla
     rts
 
 ; Print errors to LCD
@@ -198,6 +272,38 @@ print_errors:
     jsr print_hex 
     tya
     jsr print_hex
+    rts
+
+handle_fb_col:
+    rts
+
+handle_vbs:
+    pha
+
+    inc JIFFIES
+    lda JIFFIES
+    cmp #120
+    bne .done
+    lda #0
+    sta JIFFIES
+
+    inc SECONDS
+    lda SECONDS
+    cmp #60
+    bne .done
+    lda #0
+    sta SECONDS
+
+    inc MINUTES
+    lda MINUTES
+    cmp #60
+    bne .done
+    lda #0
+    sta MINUTES
+
+    inc HOURS
+.done
+    pla
     rts
 
     .org NODEBUG    ; This area of memory does not trigger the debugger board
