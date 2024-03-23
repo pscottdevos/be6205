@@ -67,8 +67,12 @@ reset:
     sta BNK_SEL
     lda #$0             ; Select lowest block
     sta BLK_SEL
-.block_loop
+.bank_loop
     jsr set_video_reg   ; Set the video register bank and block
+    jmp .set_pages      ; Skip over setting the ram block since we just did it
+.block_loop
+    jsr set_ram_blk     ; Set the ram block
+.set_pages
     lda #>VID_RAM       ; Set start page for Video RAM
     sta START_PAGE
     lda #>RSV_ADDR      ; Set stop page for Video RAM
@@ -94,7 +98,7 @@ reset:
     inc BNK_SEL         ; Move to next bank
     lda BNK_SEL         ; Load BNK_SEL to test it
     cmp #$3             ; Have we moved past FG bank?
-    bne .block_loop     ; If not, loop back
+    bne .bank_loop      ; If not, loop back
     cli                 ; After clearing RAM the first time, we can enable IRQ
     inc TEST_MODE       ; Select next test mode
     jmp .system_ram     ; Start over
