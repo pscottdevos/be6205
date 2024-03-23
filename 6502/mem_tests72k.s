@@ -77,7 +77,7 @@ reset:
     bne .block_loop     ; If not, loop back
     lda #$0
     sta BLK_SEL
-    inc BNK_SEL         ; Move to FG bank
+    inc BNK_SEL         ; Move to next bank
     lda BNK_SEL         ; Load BNK_SEL to test it
     cmp #$3             ; Have we moved past FG bank?
     bne .block_loop     ; If not, loop back

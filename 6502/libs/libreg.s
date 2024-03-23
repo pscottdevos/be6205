@@ -30,8 +30,8 @@ set_video_reg:
 .set_blk:
     clc
     adc BLK_SEL     ; Set RAM block
-    sta VID_REG
     sta VID_REG_VAL ; Store the video register value (because reg is write-only)
+    sta VID_REG
     nop             ; No Ops seem to help with stability after switching
     nop
     pla
