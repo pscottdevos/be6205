@@ -1,14 +1,15 @@
 ; Zero page variables
 
-LOC = $00           ; Page of memory under test; 2 bytes
-VAL = $02           ; "Raw" test value; 1 byte
+LOC        = $00    ; Page of memory under test; 2 bytes
+VAL        = $02    ; "Raw" test value; 1 byte
 START_PAGE = $03    ; Page at which to start testing; 1 byte
 STOP_PAGE  = $04    ; Page at which to stop testing; 1 byte
-JIFFIES = $05       ; Real-time clock 1/60th of seconds
-SECONDS = $06       ; Real-time clock seconds
-MINUTES = $07       ; Real-time clock minutes
-HOURS   = $08       ; Real-time clock hours
-ERRORS = $09       ; Total Errors; 2 bytes
+JIFFIES    = $05    ; Real-time clock 1/60th of seconds
+SECONDS    = $06    ; Real-time clock seconds
+MINUTES    = $07    ; Real-time clock minutes
+HOURS      = $08    ; Real-time clock hours
+ERRORS     = $09    ; Total Errors; 2 bytes
+TEST_MODE  = $0b    ; Test mode ; 0 = zero-fill memory; 1 = test memory
 
 ; Constants
 
@@ -22,6 +23,7 @@ SYS_RAM = $0200     ; Starting location of testable system RAM block
 
 reset:
     cld             ; Binary mode
+    sei             ; Disable interrupts
     ldx #$ff        ; Set top of stack
     txs
     jsr lcd_init    ; Initialize LCD
@@ -33,11 +35,12 @@ reset:
     sta SECONDS
     sta MINUTES
     sta HOURS
-    cli             ; enable interrupts
 
 .wait
-    jsr wait        ; Wait for resume button press
+    jsr wait            ; Wait for resume button press
 
+    lda #0              ; Set test mode to zero-fill memory
+    sta TEST_MODE
 
 .system_ram
     lda #$0             ; Select no video RAM; high speed clock
@@ -51,7 +54,12 @@ reset:
     lda #$0             ; Set inital test value to zero
     sta VAL
 
-    jsr zero_block
+    lda TEST_MODE
+    and #%00000001      ; Test zeroeth bit of test mode
+    bne .test_sys_block ; test the block of ram if 1...
+    jsr zero_block      ;   ...else zero-fill the block
+    jmp .video_ram      ; Jump past testing the block of ram
+.test_sys_block
     jsr test_block      ; Test system memory
 
 .video_ram
@@ -68,9 +76,15 @@ reset:
     lda #$0             ; Set inital test value to zero
     sta VAL
 
-    jsr zero_block
+    lda TEST_MODE
+    and #%00000001      ; Test zeroeth bit of test mode
+    bne .test_vid_block ; test the block of ram if 1...
+    jsr zero_block      ;   ...else zero-fill the block
+    jmp .next_block     ; Jump past testing the block of ram
+.test_vid_block
     jsr test_block      ; Test video RAM block
 
+.next_block
     inc BLK_SEL         ; Move to next block
     lda BLK_SEL         ; Load BLK_SEL into A to test it.
     cmp #$04            ; Have we tested all four blocks?
@@ -81,6 +95,8 @@ reset:
     lda BNK_SEL         ; Load BNK_SEL to test it
     cmp #$3             ; Have we moved past FG bank?
     bne .block_loop     ; If not, loop back
+    cli                 ; After clearing RAM the first time, we can enable IRQ
+    inc TEST_MODE       ; Select next test mode
     jmp .system_ram     ; Start over
 
 
