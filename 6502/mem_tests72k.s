@@ -9,7 +9,8 @@ SECONDS    = $06    ; Real-time clock seconds
 MINUTES    = $07    ; Real-time clock minutes
 HOURS      = $08    ; Real-time clock hours
 ERRORS     = $09    ; Total Errors; 2 bytes
-TEST_MODE  = $0b    ; Test mode ; 0 = zero-fill memory; 1 = test memory
+TEST_MODE  = $0b    ; Test mode ; 0 = zero-fill memory; 1 = test memory; 1 byte
+P_SECONDS  = $0c    ; Value of seconds at prior printing
 
 ; Constants
 
@@ -33,6 +34,8 @@ reset:
     sta ERRORS + 1
     sta JIFFIES     ; Set real run-time to zero
     sta SECONDS
+    sta P_SECONDS   ; Make prior printed seconds different from seconds...
+    inc P_SECONDS   ;   ...so time will print at 00:00:00 time
     sta MINUTES
     sta HOURS
 
@@ -237,6 +240,9 @@ print_status:
     jsr print_char
     lda BLK_SEL
     jsr print_hex
+    lda P_SECONDS   ; Compare seconds to prior time we printed the status
+    cmp SECONDS
+    beq .done       ; Skip printing the time if the seconds haven't changed
     lda #40
     jsr lcd_set_addr
     lda HOURS
@@ -248,17 +254,15 @@ print_status:
     lda #":"
     jsr print_char
     lda SECONDS
+    sta P_SECONDS
     jsr print_hex
-    lda #":"
-    jsr print_char
-    lda JIFFIES
-    jsr print_hex
+    ;lda #":"
+    ;jsr print_char
+    ;lda JIFFIES
+    ;jsr print_hex
     lda #" "
     jsr print_char
-    jsr print_char
-    jsr print_char
-    jsr print_char
-    jsr print_char
+.done
     pla
     rts
 
